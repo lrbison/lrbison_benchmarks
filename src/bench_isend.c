@@ -1,13 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <assert.h>
-#include <unistd.h>
+#include "utils.h"
 
 #include <mpi.h>
-
-#define MIN(a,b) ((a < b) ? a : b)
-#define MAX(a,b) ((a > b) ? a : b)
 
 struct timing_result {
     double submit_time_avg;
@@ -30,39 +23,6 @@ struct run_config {
     char test;
 };
 
-
-
-// call this function to start a nanosecond-resolution timer
-void timer_start(struct timespec *start_time){
-    clock_gettime(CLOCK_MONOTONIC, start_time);
-}
-
-// call this function to end a timer, returning nanoseconds elapsed as a long
-double timer_stop(struct timespec *start_time){
-    struct timespec end_time;
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
-    long diffInNanos = (end_time.tv_sec - start_time->tv_sec) * (long)1e9 + (end_time.tv_nsec - start_time->tv_nsec);
-    return diffInNanos*1e-3;
-}
-
-// call this function to end a timer, and start a new one, returning nanoseconds elapsed as a long
-double timer_restart(struct timespec *start_time){
-    struct timespec end_time;
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
-    long diffInNanos = (end_time.tv_sec - start_time->tv_sec) * (long)1e9 + (end_time.tv_nsec - start_time->tv_nsec);
-    start_time->tv_nsec = end_time.tv_nsec;
-    start_time->tv_sec = end_time.tv_sec;
-    return diffInNanos*1e-3;
-}
-
-int comp_dbls(const void * elem1, const void * elem2)
-{
-    double a = *((double*)elem1);
-    double b = *((double*)elem2);
-    if (a > b) return  1;
-    if (a < b) return -1;
-    return 0;
-}
 
 void gather_send(struct run_config *config, int dest,
     char *buf, MPI_Request *req_list, MPI_Status *stat_list,
