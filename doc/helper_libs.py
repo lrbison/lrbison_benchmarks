@@ -83,4 +83,184 @@ def compare_roots(fnames):
     fig.suptitle(common_name)
 
 
+def field_to_human(field):
+    dd = dict()
+    dd['bandwidths'] = ("Bitrate", lambda b: bytes_to_human0(b, speed=True, tobits=True))
+    dd['copys'] = ("Memcpy Time", lambda b: time_to_human0(b))
+    dd['waits'] = ("MPI_Wait Time", lambda b: time_to_human0(b))
+    dd['posts'] = ("MPI_Send/Recv Time", lambda b: time_to_human0(b))
+    dd['totals'] = ("Total Time", lambda b: time_to_human0(b))
+    if not field in dd:
+        return (field, lambda x:(x,"",1))
+    return dd[field]
+
+def time_to_human0(value, from_usec=True):
+    units = ["Ksec","sec","ms","μs","ns","ps","fs"]
+    factor = 1
+    factor_step = 1000
+    junit = 1
+    if from_usec:
+        junit = 3
+
+    while value*factor > 1100:
+        factor = factor/factor_step
+        junit -= 1
+    while value*factor < 0.900:
+        factor = factor*factor_step
+        junit += 1
+    return (value*factor, units[junit], factor)
+
+def bytes_to_human0(value, speed=False, tobits=False):
+    units =         ["TiB",  "GiB",  "MiB",  "KiB",  "Byte"]
+    speed_units =   ["TB/s", "GB/s", "MB/s", "KB/s", "B/s"]
+    bitrate_units = ["Tbps", "Gpbs", "Mbps", "Kbps", "bps"]
+    bit_units =     ["Tib",  "Gib",  "Mib",  "Kib",  "bits"]
+
+    factor_step = 1024
+    if speed: factor_step = 1000
+
+    junit = 4
+    factor = 1
+    if (tobits): factor = 8
+
+    while value*factor > 1100:
+        factor = factor/factor_step
+        junit -= 1
+    while value*factor < 0.900:
+        factor = factor*factor_step
+        junit += 1
+
+    if speed and tobits:    units = bitrate_units
+    elif speed:             units = speed_units
+    elif tobits:            units = bit_units
+
+    return (value*factor, units[junit], factor)
+
+def bytes_to_human(bytes):
+    return "{0:.2f}{1}".format(*bytes_to_human0(bytes))
+
+def bandwidth_to_human_bitrate(bytes_per_sec):
+    return "{0:.2f}{1}".format(*bytes_to_human0(bytes,speed=True,tobits=True))
+
+
+def load_pipeline_file(filename):
+    data = json.load(open(filename))
+    nranks = data['nranks']
+    ntrials = data['ntrials']
+
+    data['pp'] = {}
+    data['pp']['full_filename'] = filename
+
+    # each result is nranks * ntrials
+    for jres,res in enumerate(data['results']):
+        for field in ['bandwidths', 'copys', 'waits', 'posts', 'totals', 'jranks', 'jtrials']:
+            res[field] = numpy.array(res[field]).reshape( (nranks, ntrials) )
+    return data
+
+def plot_res_vs_rank(res,dat,fieldname):
+    nranks = dat['nranks']
+    ntrials = dat['ntrials']
+    (display_name, convertor) = field_to_human(fieldname)
+    (_,display_units, display_factor) = convertor(numpy.median(res[fieldname]))
+    for jtrial in range(ntrials):
+        xax = numpy.arange(nranks) + 0.5 * (jtrial/ntrials) - 0.25
+        plt.plot(xax,display_factor*res[fieldname][:,jtrial],'b.',markersize=3, markeredgecolor='none',label='total')
+    msgsz = "{0} Message".format(bytes_to_human(dat['message_size']))
+    bufsz = "{0}x{1} Buffers".format(res['buffer_depth'],bytes_to_human(res['buffer_size']))
+    plt.title(f"{fieldname} {msgsz} {bufsz}")
+    plt.xlabel("Rank - #")
+    plt.ylabel(f"{display_name} - {display_units}")
+
+def plot_res_vs_trial(res,dat,fieldname):
+    nranks = dat['nranks']
+    ntrials = dat['ntrials']
+    (display_name, convertor) = field_to_human(fieldname)
+    (_,display_units, display_factor) = convertor(numpy.median(res[fieldname]))
+    for jrank in range(nranks):
+        xax = numpy.arange(ntrials) + 0.5 * (jrank/nranks) - 0.25
+        plt.plot(xax,display_factor*res[fieldname][jrank,:],'b.',markersize=3, markeredgecolor='none',label=display_name)
+    msgsz = "{0} Message".format(bytes_to_human(dat['message_size']))
+    bufsz = "{0}x{1} Buffers".format(res['buffer_depth'],bytes_to_human(res['buffer_size']))
+    plt.title(f"{fieldname} {msgsz} {bufsz}")
+    plt.xlabel("Trial - #")
+    plt.ylabel(f"{display_name} - {display_units}")
+
+def bar_res_vs_bufsize(dat, fieldname):
+    nbuf_sizes = dat['nbuf_sizes']
+    ndepths = dat['ndepths']
+    fig, ax = plt.subplots(layout='constrained')
+
+    xpos = numpy.arange(nbuf_sizes)
+    width = (1/(ndepths+1))
+    multiplier=0
+
+    reduced_values = numpy.zeros( (nbuf_sizes, ndepths))
+    for res in dat['results']:
+        jsize = dat['buf_sizes'].index(res['buffer_size'])
+        jdepth = dat['buf_depth'].index(res['buffer_depth'])
+        reduced_values[jsize,jdepth] = numpy.mean(res[fieldname])
+
+    (display_name, convertor) = field_to_human(fieldname)
+    (_,display_units, display_factor) = convertor(reduced_values.mean())
+    if fieldname == "bandwidths":
+        display_factor *= dat['nranks']/2
+        display_name = "Node-wide " + display_name
+    reduced_values *= display_factor
+
+    for jdepth in range(ndepths):
+        offset = width * jdepth
+        buf_depth = dat['buf_depth'][jdepth]
+        rects = ax.bar(xpos + offset, reduced_values[:,jdepth], width, label=f"{buf_depth}-deep")
+
+    ax.set_ylabel(f"{display_name} - {display_units}")
+    ax.set_xticks(xpos + width, [ bytes_to_human(b) for b in dat['buf_sizes']])
+    ax.legend(loc='lower right', ncols=3)
+    msgsz = "{0} Message".format(bytes_to_human(dat['message_size']))
+    rnkz = f"{dat['nranks']} Ranks"
+    plt.title(f"{fieldname} {msgsz} {rnkz}")
+
+
+def bar_res_vs_tmpspace(dat, fieldname):
+    nbuf_sizes = dat['nbuf_sizes']
+    ndepths = dat['ndepths']
+    fig, ax = plt.subplots(layout='constrained')
+
+    space_ax = []
+    for buf_size in dat['buf_sizes']:
+        for buf_depth in dat['buf_depth']:
+            space_ax.append(buf_size*buf_depth)
+    space_ax = list(set(space_ax))
+    nspaces = len(space_ax)
+
+    xpos = numpy.arange(nspaces)
+    width = (1/(dat['ndepths']+1))
+    multiplier=0
+
+    reduced_values = numpy.zeros( (nspaces, ndepths))
+    for res in dat['results']:
+        space = res['buffer_size']*res['buffer_depth']
+        jspace = space_ax.index(space)
+        jdepth = dat['buf_depth'].index(res['buffer_depth'])
+        reduced_values[jspace,jdepth] = numpy.mean(res[fieldname])
+
+    (display_name, convertor) = field_to_human(fieldname)
+    (_,display_units, display_factor) = convertor(reduced_values[reduced_values!=0].mean())
+    if fieldname == "bandwidths":
+        display_factor *= dat['nranks']/2
+        display_name = "Node-wide " + display_name
+    reduced_values *= display_factor
+
+    for jdepth in range(ndepths):
+        offset = width * jdepth
+        buf_depth = dat['buf_depth'][jdepth]
+        rects = ax.bar(xpos + offset, reduced_values[:,jdepth], width, label=f"{buf_depth}-deep")
+
+    ax.set_ylabel(f"{display_name} - {display_units}")
+    ax.set_xticks(xpos + width, [ bytes_to_human(b) for b in space_ax], rotation=90)
+    ax.set_xlabel("Total bounce buffer space per rank")
+    ax.legend(loc='lower right', ncols=3)
+    msgsz = "{0} Message".format(bytes_to_human(dat['message_size']))
+    rnkz = f"{dat['nranks']} Ranks"
+    plt.title(f"{fieldname} {msgsz} {rnkz}")
+
 print("Module re-loaded")
