@@ -1,4 +1,7 @@
 simple_cas
 *.dat
+*.json
+*.o
 slurm-*.out
 bench_isend
+bench_pipeline
