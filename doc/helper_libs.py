@@ -157,19 +157,31 @@ def load_pipeline_file(filename):
             res[field] = numpy.array(res[field]).reshape( (nranks, ntrials) )
     return data
 
-def plot_res_vs_rank(res,dat,fieldname):
+def plot_res_vs_rank(res,dat,fieldname,fmt='b.',typical_val=None):
     nranks = dat['nranks']
     ntrials = dat['ntrials']
     (display_name, convertor) = field_to_human(fieldname)
-    (_,display_units, display_factor) = convertor(numpy.median(res[fieldname]))
+    if typical_val is None:
+        typical_val = numpy.median(res[fieldname])
+    (_,display_units, display_factor) = convertor(typical_val)
     for jtrial in range(ntrials):
         xax = numpy.arange(nranks) + 0.5 * (jtrial/ntrials) - 0.25
-        plt.plot(xax,display_factor*res[fieldname][:,jtrial],'b.',markersize=3, markeredgecolor='none',label='total')
+        plt.plot(xax,display_factor*res[fieldname][:,jtrial],fmt,markersize=3, markeredgecolor='none',label='total')
     msgsz = "{0} Message".format(bytes_to_human(dat['message_size']))
     bufsz = "{0}x{1} Buffers".format(res['buffer_depth'],bytes_to_human(res['buffer_size']))
     plt.title(f"{fieldname} {msgsz} {bufsz}")
     plt.xlabel("Rank - #")
     plt.ylabel(f"{display_name} - {display_units}")
+
+def plot_res_summary_vs_rank(res, dat):
+    plt.figure()
+    plt.subplot(121)
+    plot_res_vs_rank(res,dat,'copys','b.',2000)
+    plot_res_vs_rank(res,dat,'posts','g.',2000)
+    plot_res_vs_rank(res,dat,'waits','r.',2000)
+    plot_res_vs_rank(res,dat,'totals','k.',2000)
+    plt.subplot(122)
+    plot_res_vs_rank(res,dat,'bandwidths','r.')
 
 def plot_res_vs_trial(res,dat,fieldname):
     nranks = dat['nranks']
