@@ -42,12 +42,3 @@ double static inline timer_restart(struct timespec *start_time){
     start_time->tv_sec = end_time.tv_sec;
     return diffInNanos*1e-3;
 }
-
-int static comp_dbls(const void * elem1, const void * elem2)
-{
-    double a = *((double*)elem1);
-    double b = *((double*)elem2);
-    if (a > b) return  1;
-    if (a < b) return -1;
-    return 0;
-}
