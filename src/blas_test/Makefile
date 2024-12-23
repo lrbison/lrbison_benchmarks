@@ -26,6 +26,10 @@
 # BLAS_LIB = mkl_intel_lp64
 # RPATH = /fsx/spack/opt/spack/linux-ubuntu20.04-icelake/gcc-13.3.0/intel-oneapi-mkl-2024.2.0-n342ly76imrkxwbclf7lf5woxbwaco6k/mkl/latest/lib/
 # BLAS_LDFLAGS = -pthread -fopenmp -lmkl_intel_thread -lmkl_rt -lmkl_core -l$(BLAS_LIB) -Wl,-rpath,$(RPATH) -L$(RPATH)
+#------------
+# BLAS_LIB = nvpl_blas_lp64_gomp
+# RPATH = /fsx/nvpl/nvpl-linux-sbsa-24.7/lib
+# BLAS_LDFLAGS = -pthread -fopenmp -lnvpl_blas_core -l$(BLAS_LIB) -Wl,-rpath,$(RPATH) -L$(RPATH)
 ##############
 
 # For building OpenBLAS on Neoverse-v1:
