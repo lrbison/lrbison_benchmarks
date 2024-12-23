@@ -107,7 +107,7 @@ static void initrands(int nelem, double *arr) {
 
 int main() {
     double *A, *B, *C;
-    const int nfine = 3;
+    const int nfine = 20;
     int *fine_steps;
     fine_steps = (int*)malloc( nfine * sizeof(*fine_steps));
     int coarse_taps[] = {0, nfine/2, nfine-1};
