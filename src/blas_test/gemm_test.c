@@ -105,7 +105,7 @@ static void initrands(int nelem, double *arr) {
     }
 }
 
-int main() {
+int main(int argc, char** argv) {
     double *A, *B, *C;
     const int nfine = 20;
     int *fine_steps;
@@ -118,12 +118,19 @@ int main() {
     char results_file[256];
     snprintf(results_file, 255, "results-%s.json", xstr(BLAS_LIB));
     results_file[255] = '\0';
+    char *user_tag = "";
+
+    if (argc > 1) {
+        user_tag = argv[1];
+        snprintf(results_file, 255, "results-%s-%s.json", xstr(BLAS_LIB), argv[1]);
+    }
 
     uint64_t max_dim = fine_steps[nfine-1];
     uint64_t max_mat = max_dim * max_dim;
     int sparse_sampling = 1;
 
-    printf("Benchmarking gemm for BLAS: %s\n", xstr(BLAS_LIB) );
+    printf("Benchmarking gemm for BLAS: %s into %s\n", xstr(BLAS_LIB),results_file );
+    sleep(1);
 
     /* adjust if LDA(>=M) or LDB(>=K) is modified */
     A = (double*) malloc( max_mat * sizeof(double) );
@@ -150,6 +157,7 @@ int main() {
     json_object_push( root, "test_name", json_string_new("gemm") );
     json_object_push( root, "blas", json_string_new( xstr(BLAS_LIB) ) );
     json_object_push( root, "OMP_NUM_THREADS", json_integer_new(count_cpus()));
+    json_object_push( root, "user_tag", json_string_new(user_tag) );
 
     result_arr = json_array_new(0);
     json_object_push( root, "results", result_arr );
