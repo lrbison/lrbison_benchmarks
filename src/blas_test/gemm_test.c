@@ -76,7 +76,16 @@ void run_many_times( void (*func_ptr)(), double target_usec, int warmup, int *co
 }
 
 
-
+#if DO_LOG_AX
+static void ilogspace(int nelem, int low, int *arr) {
+    int log_fac=2;
+    int val = low;
+    for (int j=0; j<nelem; j++) {
+        arr[j] = val;
+        val = val * log_fac;
+    }
+}
+#else
 static void ilinspace(int nelem, int low, int high, int *arr) {
     double dlow = low;
     double dstep = (double)(high-low)/(nelem-1);
@@ -84,6 +93,7 @@ static void ilinspace(int nelem, int low, int high, int *arr) {
         arr[j] = (int)(dlow + dstep*j);
     }
 }
+#endif
 
 /* use this simple xorshift for a dead-simple and repeatable fast PRNG. */
 /* xorshift64s, variant A_1(12,25,27) with multiplier M_32 from line 3 of table 5 */
@@ -107,12 +117,22 @@ static void initrands(int nelem, double *arr) {
 
 int main(int argc, char** argv) {
     double *A, *B, *C;
-    const int nfine = 20;
     int *fine_steps;
+    int nfine;
+#if DO_LOG_AX
+    nfine = 16;
     fine_steps = (int*)malloc( nfine * sizeof(*fine_steps));
+    ilogspace(nfine, 1, fine_steps);
+
+#else
+    nfine = 20;
+    fine_steps = (int*)malloc( nfine * sizeof(*fine_steps));
+    ilinspace( nfine, 5, 5000, fine_steps);
+#endif
+
+
     int coarse_taps[] = {0, nfine/2, nfine-1};
     const int ncoarse = sizeof(coarse_taps) / sizeof(int);
-    ilinspace( nfine, 5, 5000, fine_steps);
     int run_count;
     double avg_usec;
     char results_file[256];
@@ -125,20 +145,25 @@ int main(int argc, char** argv) {
         snprintf(results_file, 255, "results-%s-%s.json", xstr(BLAS_LIB), argv[1]);
     }
 
-    uint64_t max_dim = fine_steps[nfine-1];
-    uint64_t max_mat = max_dim * max_dim;
-    int sparse_sampling = 1;
+    size_t max_dim = fine_steps[nfine-1];
+    size_t max_mat = max_dim * max_dim;
+    int sparse_sampling = 0;
 
     printf("Benchmarking gemm for BLAS: %s into %s\n", xstr(BLAS_LIB),results_file );
+    printf("Max Matrix dim: %ld.  Requires %ld GB\n", max_dim, 3*max_mat/1024/1024/1024);
     sleep(1);
 
     /* adjust if LDA(>=M) or LDB(>=K) is modified */
+    printf("Allocating matrix for N=(%lu) elements: NxN = %ld\n", max_dim, max_mat);
     A = (double*) malloc( max_mat * sizeof(double) );
     B = (double*) malloc( max_mat * sizeof(double) );
     C = (double*) malloc( max_mat * sizeof(double) );
     initrands( max_mat, A );
     initrands( max_mat, B );
     initrands( max_mat, C );
+    printf("A Random number: %f %f\n",A[0],A[max_mat-1]);
+    printf("B Random number: %f %f\n",B[0],B[max_mat-1]);
+    printf("C Random number: %f %f\n",C[0],C[max_mat-1]);
 
     double alpha, beta;
 

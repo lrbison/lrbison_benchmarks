@@ -36,7 +36,7 @@
 # NUM_THREADS=256 CC=armclang FC=armflang make -j 32 target=neoverse-v1
 
 # cflags won't really matter -- all the work is done in the library.
-CFLAGS += -g -Og -Wall -fopenmp
+CFLAGS += -g -Og -Wall -fopenmp -DDO_LOG_AX
 CC ?= gcc
 
 UTILS_PATH = ../utils
