@@ -10,6 +10,7 @@
 #------------
 ##############
 CONFIG ?= openblas
+BIN_SUFFIX ?= ""
 
 include blas_mk_shards/$(CONFIG).mk
 
@@ -29,9 +30,9 @@ LDFLAGS += $(BLAS_LDFLAGS)
 # %.o: %.c Makefile utils.h
 # 	$(CC) $(CFLAGS) -c -o $@ $^
 
-BIN_LIST := gemm_test
+BIN_LIST := gemm_test gemm_test$(BIN_SUFFIX)
 
-gemm_test: gemm_test.o $(UTILS_PATH)/json-builder.o
+gemm_test$(BIN_SUFFIX): gemm_test.o $(UTILS_PATH)/json-builder.o
 	$(CC) -o $@ $(CFLAGS) $^ $(LDFLAGS)
 	@echo "==> Built $@ with config from $(CONFIG): $(BLAS_TXT)"
 
