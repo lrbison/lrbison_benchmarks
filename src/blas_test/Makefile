@@ -12,6 +12,8 @@
 CONFIG ?= openblas
 BIN_SUFFIX ?= ""
 
+all:: gemm_test$(BIN_SUFFIX)
+
 include blas_mk_shards/$(CONFIG).mk
 
 # For building OpenBLAS on Neoverse-v1:
@@ -35,8 +37,6 @@ BIN_LIST := gemm_test gemm_test$(BIN_SUFFIX)
 gemm_test$(BIN_SUFFIX): gemm_test.o $(UTILS_PATH)/json-builder.o
 	$(CC) -o $@ $(CFLAGS) $^ $(LDFLAGS)
 	@echo "==> Built $@ with config from $(CONFIG): $(BLAS_TXT)"
-
-all: $(BIN_LIST)
 
 $(BIN_LIST): $(UTILS_PATH)/utils.h
 
