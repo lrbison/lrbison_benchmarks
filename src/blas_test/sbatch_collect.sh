@@ -26,14 +26,14 @@ if [[ $NUMA_NODE_ZERO_CPUS != $ALL_CPUS ]]; then
     echo "Starting tasks for numa 0 only: $NUMA_NODE_ZERO_CPUS"
     for CONFIG in $CONFIG_LIST; do
         make clean && make CONFIG=$CONFIG BIN_SUFFIX=$NAME
-        time taskset -c ${NUMA_NODE_ZERO_CPUS} ./gemm_test ${NAME}-1socket
+        time taskset -c ${NUMA_NODE_ZERO_CPUS} ./gemm_test$NAME ${NAME}-1socket
     done
 fi
 
 echo "Starting tasks for full-host cpus: $ALL_CPUS"
 for CONFIG in $CONFIG_LIST; do
     make clean && make CONFIG=$CONFIG BIN_SUFFIX=$NAME
-    time ./gemm_test ${NAME}
+    time ./gemm_test$NAME ${NAME}
 done
 
 echo "Complete."
