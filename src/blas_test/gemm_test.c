@@ -58,7 +58,9 @@ static void print_help() {
     printf(" --all-mat-combos|-x       \t\t Without -x M=N=K at all test points.  With -x scan each matrix dimension independently.\n");
     printf("                           \t\t WARNING: with -x, test length grows by length of mat-sizes^3 power!\n");
     printf(" --cache-smashes|-c <list> \t\t Increase working set size of each test by given size in KiB.\n");
+    printf(" --target_milisec|-T <MSEC>\t\t Repeat each test until MSEC many miliseconds have elapsed.\n");
     printf(" --help|-h                 \t\t Print this help.\n");
+    printf(" --tag|-t <tag>            \t\t write results to file with <tag> in the name.\n");
     printf("\n");
     printf("For each argument taking a <list>, it may take the following forms:\n");
     printf("  lin:<start>,<increment>,<stop> \t\t A linearly incrementing list\n");
@@ -203,12 +205,11 @@ static int parse_axis_string( const char *optarg_const, int* num_ax, int **ax) {
     } else {
         rc = parse_opts_list(optarg, num_ax, ax);
     }
-    free(optarg);
-    if (rc) {
+    
+    if (rc)
         printf("Did not understand axis: %s. Expected lin:<start>,<inc>,<stop> or list:<a>,<b>,...,<n> or just a single <Value>", optarg);
-        return 1;
-    }
-    return 0;
+    free(optarg);
+    return rc;
 }
 
 
@@ -231,6 +232,8 @@ int main(int argc, char** argv) {
     int *mat_ax = NULL;
     int *rank_ax = NULL;
     int do_all_mat_combos = 0;
+    double user_msec_target = 1.0;
+    double user_usec_target;
 
 
 
@@ -260,10 +263,11 @@ int main(int argc, char** argv) {
             {"cache-smashes",   required_argument,  NULL,   'c'},
             {"help",            no_argument,        NULL,   'h'},
             {"tag",             required_argument,  NULL,   't'},
+            {"target-msec",     required_argument,  NULL,   'T'},
             {NULL,              0,                  NULL,    0 }
         };
 
-        c = getopt_long(argc, argv, "r:m:xc:ht:", long_options, &option_index);
+        c = getopt_long(argc, argv, "r:m:xc:ht:T:", long_options, &option_index);
         if (c == -1)
             break;
         switch (c)
@@ -289,6 +293,9 @@ int main(int argc, char** argv) {
                 goto happy_exit;
             case 't':
                 user_tag = optarg;
+                break;
+            case 'T':
+                user_msec_target = atof(optarg);
                 break;
             default:
                 break;
@@ -330,13 +337,18 @@ int main(int argc, char** argv) {
         printf("Benchmarking gemm for BLAS: %s into %s\n", xstr(BLAS_LIB),results_file );
         if (3*max_mat/1024/1024/1024 < 4) {
             printf("Max Matrix dim: %ld.  Requires %ld KiB/rank, %ld GiB Total.\n",
-                max_dim, 3*max_mat/1024, comm_size*3*max_mat/1024);
+                max_dim, 3*max_mat/1024, comm_size*3*max_mat/1024/1024/1024);
         } else {
             printf("Max Matrix dim: %ld.  Requires %ld GiB/rank, %ld GiB Total\n",
                 max_dim, 3*max_mat/1024/1024/1024, comm_size*3*max_mat/1024/1024/1024);
         }
-        printf("Max Cache smashing requires additional %ld GiB/rank, %ld GiB Total\n",
-                (long)3*cache_ax[num_cache_ax-1]/1024/1024/1024, (long)comm_size*3*cache_ax[num_cache_ax-1]/1024/1024/1024);
+        printf("Max Cache smashing requires additional %ld MiB/rank, %ld GiB Total\n",
+                (long)3*cache_ax[num_cache_ax-1]/1024/1024, (long)comm_size*3*cache_ax[num_cache_ax-1]/1024/1024/1024);
+        double total_tests = num_rank_ax*num_cache_ax*num_mat_ax;
+        if (do_all_mat_combos)
+            total_tests *= num_mat_ax*num_mat_ax;
+        printf("Requesting %.0f total tests at %.1f ms each, minimum time to complete: %.2f minutes\n",
+            total_tests, user_msec_target, total_tests*user_msec_target/1000./60.);
     }
     sleep(1);
 
@@ -352,6 +364,7 @@ int main(int argc, char** argv) {
     initrands( max_mat + cache_ax[num_cache_ax-1]/sizeof(DTYPE), C );
 
     DTYPE alpha, beta;
+    user_usec_target = user_msec_target*1000.;
 
     json_value *root;
     json_value *axis_arr;
@@ -362,17 +375,36 @@ int main(int argc, char** argv) {
 
     axis_arr = json_array_new(num_mat_ax);
     for (int j=0; j<num_mat_ax; j++) {
-        json_array_push( axis_arr, json_double_new(mat_ax[j]));
+        json_array_push( axis_arr, json_integer_new(mat_ax[j]));
     }
-    json_object_push( root, "fine_axis", axis_arr );
-    json_object_push( root, "test_name", json_string_new("gemm") );
+    json_object_push( root, "mat_ax", axis_arr );
+
+    axis_arr = json_array_new(num_rank_ax);
+    for (int j=0; j<num_rank_ax; j++) {
+        json_array_push( axis_arr, json_integer_new(rank_ax[j]));
+    }
+    json_object_push( root, "mpi_rank_ax", axis_arr );
+
+    axis_arr = json_array_new(num_cache_ax);
+    for (int j=0; j<num_cache_ax; j++) {
+        json_array_push( axis_arr, json_integer_new(cache_ax[j]));
+    }
+    json_object_push( root, "cache_ax", axis_arr );
+
+    json_object_push( root, "precision", json_string_new( xstr(DTYPE) ) );
     json_object_push( root, "blas", json_string_new( xstr(BLAS_LIB) ) );
     json_object_push( root, "blas_fun", json_string_new( xstr(GEMM_FUN) ) );
     json_object_push( root, "OMP_NUM_THREADS", json_integer_new(count_cpus()));
+    json_object_push( root, "MPI_ranks", json_integer_new(comm_size));
     json_object_push( root, "user_tag", json_string_new(user_tag) );
+    json_object_push( root, "do_all_mat_combos", json_integer_new(do_all_mat_combos) );
+    json_object_push( root, "target_milisec", json_double_new(user_msec_target) );
+    
 
     result_arr = json_array_new(0);
     json_object_push( root, "results", result_arr );
+
+    
 
 
 
@@ -422,7 +454,7 @@ int main(int argc, char** argv) {
         dgemm_max_shift = cache_ax[jcache_ax];
         MPI_Barrier( MPI_COMM_WORLD );
         if (comm_rank+1 <= nranks_working) {
-            run_many_times( call_dgemm_once, 50000.0, 0, &run_count, &avg_usec);
+            run_many_times( call_dgemm_once, user_usec_target, 0, &run_count, &avg_usec);
         } else {
             avg_usec = 0.0;
             run_count = 0;
@@ -434,7 +466,7 @@ int main(int argc, char** argv) {
         if (comm_rank == 0) {
 
             double avg_avg_usec = avg_usec_sum / nranks_working;
-            double avg_run_count = run_count_sum / nranks_working;
+            double avg_run_count = (double)run_count_sum / (double)nranks_working;
             double est_flo = 2.0 * (double)*dgemm_parms.m * (double)*dgemm_parms.n * (double)*dgemm_parms.k;
             double est_gflops = 1e-3 * est_flo / (avg_avg_usec);
             uint64_t wss = dgemm_max_shift*3 + sizeof(DTYPE)*((mat_ax[jM] * mat_ax[jK]) + (mat_ax[jK] * mat_ax[jN]) + (mat_ax[jM] * mat_ax[jN]));
@@ -447,6 +479,7 @@ int main(int argc, char** argv) {
             json_object_push( result_entry, "m", json_integer_new(mat_ax[jM]));
             json_object_push( result_entry, "n", json_integer_new(mat_ax[jN]));
             json_object_push( result_entry, "k", json_integer_new(mat_ax[jK]));
+            json_object_push( result_entry, "cache_smash_bytes", json_integer_new(dgemm_max_shift));
             json_object_push( result_entry, "ranks_working", json_integer_new(nranks_working));
             json_object_push( result_entry, "gflops", json_double_new(est_gflops));
             json_object_push( result_entry, "latency_usec", json_double_new(avg_avg_usec));
