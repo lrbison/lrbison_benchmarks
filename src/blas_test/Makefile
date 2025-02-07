@@ -22,8 +22,8 @@ include blas_mk_shards/$(CONFIG).mk
 BLAS_TXT ?= $(notdir $(BLAS_LIB))
 
 # cflags won't really matter -- all the work is done in the library.
-CFLAGS += -g -Og -Wall -fopenmp -DDO_LOG_AX
-CC ?= gcc
+CFLAGS += -g -Og -Wall -fopenmp
+CC = mpicc
 
 UTILS_PATH = ../utils
 CFLAGS += -I$(UTILS_PATH) -DBLAS_LIB=$(BLAS_TXT)
