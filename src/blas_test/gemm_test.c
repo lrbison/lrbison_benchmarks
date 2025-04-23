@@ -356,6 +356,7 @@ int main(int argc, char** argv) {
     if (comm_rank == 0) {
         printf("Allocating matrix for N=(%lu) elements: NxN = %ld\n", max_dim, max_mat);
     }
+    xorshift_state = comm_rank+1;
     A = (DTYPE*) malloc( max_mat * sizeof(DTYPE) + cache_ax[num_cache_ax-1] );
     B = (DTYPE*) malloc( max_mat * sizeof(DTYPE) + cache_ax[num_cache_ax-1] );
     C = (DTYPE*) malloc( max_mat * sizeof(DTYPE) + cache_ax[num_cache_ax-1] );
