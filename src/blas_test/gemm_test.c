@@ -188,9 +188,10 @@ static int parse_opts_range(char* optarg, int *num_ax, int**ax) {
 	*ax = calloc(*num_ax, sizeof(**ax));
 
     /* linear axis */
-    for (i = 0; i < *num_ax && i < end; i++) {
+    for (i = 0; i < *num_ax && i <= end; i++) {
         (*ax)[i] = start + (i * inc);
     }
+    *num_ax = i;
     return 0;
 }
 
@@ -248,6 +249,8 @@ int main(int argc, char** argv) {
 
     MPI_Init(&argc, &argv);
 
+    comm_rank = 0;
+    comm_size = 1;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     
